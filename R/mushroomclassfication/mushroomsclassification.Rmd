@@ -1,0 +1,171 @@
+---
+title: "Mushroom classification"
+output: github_document
+author : "Bhasheyam Krishnan"
+---
+loading the dataset
+```{r}
+mushroombase = read.csv(file = "mushrooms.csv" )
+
+```
+
+Basic Info About the dataset
+```{r}
+names(mushroombase)
+```
+```{r}
+dim(mushroombase)
+```
+
+The Dataset has 23 Features and 8124 Instance 
+
+```{r}
+
+sum(is.na(mushroombase))
+```
+
+
+```{r}
+sum(is.null(mushroombase))
+
+
+```
+There is  no NA and null  in Dataset, so we dont have missing values
+
+```{r}
+summary(mushroombase)
+```
+
+From the above it is clear that all the type class. so we need to factorize the dataset to use it.
+Here the the target is Class.
+
+so we have to train models in Classification and Clustering.
+
+
+Factorize the Dataset
+```{r}
+for ( n in names(mushroombase)){
+  
+  mushroombase[n] = as.factor(unlist(mushroombase[n]))
+}
+str(mushroombase)
+```
+
+Spliting the Training and Test data in  2:1 (Train:Test)
+
+
+```{r}
+set.seed(134)
+jumble = runif(nrow(mushroombase))
+mushroombase = mushroombase[ordered(jumble),]
+sampleindex = sample(2,nrow(mushroombase), replace = TRUE, prob = c(0.67, 0.33))
+mushroomtrain = mushroombase[sampleindex == 1,]
+mushroomtest = mushroombase[sampleindex == 2,]
+
+```
+
+```{r}
+table(mushroomtrain$class)
+```
+
+From the above we can see the Edible class is postive class
+```{r}
+print(2795 / (2795 + 2591))
+```
+baseline is considering the positive class as prediticed for all instance which is 52% percent approximately.
+
+
+```{r}
+library(mlr)
+mushroomTrain = makeClassifTask(data = mushroomtrain, target = "class")
+mushroomTest = makeClassifTask(data = mushroomtest, target = "class")
+
+```
+
+
+```{r}
+library(mlr)
+mustree = makeLearner("classif.rpart", predict.type = "response")
+treecv =  makeResampleDesc("CV",iters = 10L)
+param = makeParamSet(
+makeIntegerParam("minsplit",lower = 10, upper = 20),
+makeIntegerParam("minbucket", lower = 5, upper = 10),
+makeNumericParam("cp", lower = 0.001, upper = 0.1)
+)
+
+control = makeTuneControlGrid()
+
+treetune <- tuneParams(learner = mustree, resampling = treecv, task = traintask, par.set = param, control = control, measures = acc)
+```
+
+
+
+```{r}
+
+treetune$y
+
+```
+
+
+
+```{r}
+treetune$x
+tree = setHyperPars(mustree, par.vals = treetune$x)
+traintree = train(tree, mushroomTrain)
+predicttree = predict(traintree, mushroomTest)
+table(mushroomtest$class,predicttree$data$response)
+```
+
+
+```{r}
+library(rattle)	
+fancyRpartPlot(traintree$learner.model)
+```
+
+
+```{r}
+mushroomtest %>% ggplot(aes(x = odor,y = spore.print.color,color= predicttree$data$response)) + geom_point() 
+```
+
+```{r}
+mushroomtest %>% ggplot(aes(x = odor,y = spore.print.color,color= class)) + geom_point() 
+```
+
+From the above the Decression Tree generationg result close to 100 which look like a over fit. we can club some more entires from orginal set and try to test the model
+
+
+```{r}
+nsample = sample(2,nrow(mushroombase),replace = TRUE)
+
+test1mushroom = mushroombase[nsample == 1,]
+test2mushroom = mushroombase[nsample == 2,]
+mushroomTest1 = makeClassifTask(data= test1mushroom,target = "class")
+mushroomTest2 = makeClassifTask(data= test2mushroom,target = "class")
+```
+
+
+
+```{r}
+traintree1 = train(tree, mushroomTrain)
+predicttree1 = predict(traintree1, mushroomTest1)
+table(test1mushroom$class,predicttree1$data$response)
+```
+
+
+
+```{r}
+traintree2 = train(tree, mushroomTrain)
+predicttree2 = predict(traintree2, mushroomTest2)
+table(test2mushroom$class,predicttree2$data$response)
+```
+
+From the Above the given dataset works well for the Decision Tree classification as for all the three test it is producing more than 98% so we can use this model .
+
+```{r}
+library(pROC)
+library(ROCR)
+library(gplots)
+destreepredition = prediction(test2mushroom$class,predicttree2$data$response)
+```
+
+
