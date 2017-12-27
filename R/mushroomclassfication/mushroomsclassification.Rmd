@@ -95,7 +95,7 @@ makeNumericParam("cp", lower = 0.001, upper = 0.1)
 
 control = makeTuneControlGrid()
 
-treetune <- tuneParams(learner = mustree, resampling = treecv, task = traintask, par.set = param, control = control, measures = acc)
+treetune <- tuneParams(learner = mustree, resampling = treecv, task = mushroomTrain, par.set = param, control = control, measures = acc)
 ```
 
 
@@ -123,13 +123,8 @@ fancyRpartPlot(traintree$learner.model)
 ```
 
 
-```{r}
-mushroomtest %>% ggplot(aes(x = odor,y = spore.print.color,color= predicttree$data$response)) + geom_point() 
-```
 
-```{r}
-mushroomtest %>% ggplot(aes(x = odor,y = spore.print.color,color= class)) + geom_point() 
-```
+
 
 From the above the Decression Tree generationg result close to 100 which look like a over fit. we can club some more entires from orginal set and try to test the model
 
@@ -154,18 +149,138 @@ table(test1mushroom$class,predicttree1$data$response)
 
 
 ```{r}
+library(ggplot2)
+nsample = sample(2,nrow(mushroombase),replace = TRUE)
+
+test1mushroom = mushroombase[nsample == 1,]
+test2mushroom = mushroombase[nsample == 2,]
+mushroomTest1 = makeClassifTask(data= test1mushroom,target = "class")
+mushroomTest2 = makeClassifTask(data= test2mushroom,target = "class")
 traintree2 = train(tree, mushroomTrain)
 predicttree2 = predict(traintree2, mushroomTest2)
 table(test2mushroom$class,predicttree2$data$response)
-```
 
-From the Above the given dataset works well for the Decision Tree classification as for all the three test it is producing more than 98% so we can use this model .
 
-```{r}
+#From the Above the given dataset works well for the Decision Tree classification as for all the three test it is #producing more than 98% so we can use this model .
+
+
 library(pROC)
 library(ROCR)
 library(gplots)
-destreepredition = prediction(test2mushroom$class,predicttree2$data$response)
+actual = c()
+predicted1 = c()
+for(n in test2mushroom$class ){
+  if ( n == "e"){
+    actual = c(actual,0)
+  }
+  else{
+    actual = c(actual,1)
+  }
+  
+}
+for(n1 in predicttree2$data$response ){
+  if ( n1 == "e"){
+    predicted1 = c(predicted1,0)
+  }
+  else{
+    predicted1 = c(predicted1,1)
+  }
+  
+}
+destreepredition = prediction(actual,predicted1)
+
+perform = performance(destreepredition, measure = "tpr", x.measure = "fpr")
+
+auc <- performance(destreepredition, measure = "auc")
+auc <- auc@y.values[[1]]
+
+roc.data <- data.frame(fpr=unlist(perform@x.values),
+                       tpr=unlist(perform@y.values))
+ggplot(roc.data, aes(x=fpr, ymin=0, ymax=tpr)) +
+    geom_ribbon(alpha=0.2) +
+    geom_line(aes(y=tpr),color= "blue") +
+    ggtitle(paste0("ROC Curve w/ AUC=", auc))
 ```
+The above is almost a ideal perfect ROC Curve which is not possible in many cases. 
+
+
+
+Naive bayes:
+```{r}
+library(e1071)
+naivemodel = naiveBayes(class ~ . ,data = mushroomtrain)
+summary(naivemodel)
+```
+```{r}
+str(naivemodel)
+```
+
+
+```{r}
+library(ggplot2)
+naivepredict = predict(naivemodel,mushroomtest[,2:23])
+table(mushroomtest$class ,naivepredict)
+
+
+actual1 = c()
+predicted2 = c()
+for(n in mushroomtest$class ){
+  if ( n == "e"){
+    actual1 = c(actual1,0)
+  }
+  else{
+    actual1 = c(actual1,1)
+  }
+  
+}
+for(n1 in naivepredict ){
+  if ( n1 == "e"){
+    predicted2 = c(predicted2,0)
+  }
+  else{
+    predicted2 = c(predicted2,1)
+  }
+  
+}
+
+naivepredicted = prediction(actual1,predicted2)
+
+perform1 = performance(naivepredicted, measure = "tpr", x.measure = "fpr")
+naiveperform = performance(naivepredicted, measure = "auc")
+auc = naiveperform@y.values[[1]]
+
+
+roc.data1 <- data.frame(fpr=unlist(perform1@x.values),
+                       tpr=unlist(perform1@y.values))
+ggplot(roc.data1, aes(x = fpr,  ymin=0, ymax=tpr))+ geom_ribbon(alpha=0.5) +
+    geom_line(aes(y=tpr)) + 
+    ggtitle(paste0("ROC Curve w/ AUC=", auc))
+```
+
+
+
+
+From the above we can observe decsition tree perfom well.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
