@@ -170,7 +170,8 @@ confusionMatrix(knnpred,iris_test[,6])
 ```{r}
 names(iris_test)
 ```
-```{r}
+#```{r}
+#####
 library(plyr)
 
 plotdata = cbind(x = iris_test$SepalLengthCm, y = iris_test$PetalLengthCm , predicted = knnpred)
@@ -179,12 +180,12 @@ find_hull = function(df) df[chull(df$x, df$y), ]
 
 boundary = ddply(plotdata, .variables = "predicted", .fun = find_hull)
 
-```
+#```
 
 
 ```{r}
 library(ggplot2)
-ggplot(iris_test, aes(x=SepalLengthCm,y =PetalWidthCm,z =knnpred,color = knnpred))+ geom_contour(bins = 3) + ggtitle("knnmodel") 
+ggplot(iris_test, aes(x=SepalLengthCm,y =PetalWidthCm,color = knnpred))+ geom_point(size = 3) + ggtitle("knnmodel") 
 
 ```
 
