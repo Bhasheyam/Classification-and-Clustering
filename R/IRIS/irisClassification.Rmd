@@ -1,0 +1,202 @@
+---
+title: "iris"
+output: github_document
+Author: "Bhasheyam Krishnan"
+---
+Loading the dataset
+```{r}
+irirdata = read.csv(file = "iris.csv")
+```
+
+```{r}
+fix(irirdata)
+```
+
+check for missing data
+```{r}
+irirdata[irirdata == ""] = NA
+sum(is.na(irirdata))
+```
+
+The dataset deosnt have any missing data.
+```{r}
+summary(irirdata)
+```
+
+From the above we can see all nuemeric type and one is of the type class. So the it is the type of classification
+
+
+so lets scale the the data .
+
+```{r}
+library(AppliedPredictiveModeling)
+transparentTheme(trans = .4)
+library(caret)
+featurePlot(x = irirdata[, 2:5], 
+            y = irirdata$Species, 
+            plot = "pairs",
+            ## Add a key at the top
+            auto.key = list(columns = 3))
+```
+```{r}
+library(AppliedPredictiveModeling)
+library(caret)
+transparentTheme(trans = .9)
+featurePlot(x = iris[, 1:4], 
+            y = iris$Species,
+            plot = "density", 
+            ## Pass in options to xyplot() to 
+            ## make it prettier
+            scales = list(x = list(relation="free"), 
+                          y = list(relation="free")), 
+            adjust = 1.5, 
+            pch = "|", 
+            layout = c(4, 1), 
+            auto.key = list(columns = 3))
+```
+```{r}
+library(AppliedPredictiveModeling)
+library(caret)
+featurePlot(x = irirdata[, 2:5], 
+            y = irirdata$Species, 
+            plot = "box", 
+            ## Pass in options to bwplot() 
+            scales = list(y = list(relation="free"),
+                          x = list(rot = 90)),  
+            layout = c(4,1 ), 
+            auto.key = list(columns = 2))
+```
+
+
+except sepalWidth feature all other have seperate cluster.
+
+```{r}
+normal = function(x){
+  num = x - min(x)
+  den =max(x) - min(x)
+  return ( num/den)
+  
+}
+iris_scaled = as.data.frame(lapply(Filter(is.numeric,irirdata),normal))
+iris_scaled = cbind(iris_scaled,Species =irirdata[,6])
+summary(iris_scaled)
+```
+
+
+Now data is prepared and lets look for outliers.
+```{r}
+boxplot(iris_scaled[,2:5])
+
+
+```
+Only Sepalwidth has the outliers 4 of them are there.
+```{r}
+summary(iris_scaled)
+```
+
+```{r}
+iris_scaled = iris_scaled[iris_scaled$SepalWidthCm < 0.80,]
+```
+
+```{r}
+dim(iris_scaled)
+```
+outliers are removed
+
+Spliting the data into train and test.
+
+```{r}
+set.seed(123)
+jumble = runif(nrow(iris_scaled))
+iris_scaled = iris_scaled[ordered(jumble),]
+sampleindex = sample(2,nrow(iris_scaled),replace = TRUE,prob = c(0.67,0.33))
+iris_train = iris_scaled[sampleindex == 1,]
+iris_test = iris_scaled[sampleindex == 2,]
+dim(iris_test)
+dim(iris_train)
+```
+
+
+```{r}
+library(caret)
+library(rpart.plot)
+
+
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+dtree_fit <- train(Species ~., data = iris_train[,2:6], method = "rpart",
+                   parms = list(split = "information"),
+                   trControl=trctrl,
+                   tuneLength = 10)
+
+
+
+```
+
+
+```{r}
+library(rpart.plot)
+prp(dtree_fit$finalModel, box.palette = "Reds", tweak = 1.2)
+```
+```{r}
+decisionpred = predict(dtree_fit,iris_test[,2:5])
+confusionMatrix(iris_test[,6],decisionpred)
+```
+```{r}
+iris_train[,6] = as.factor(iris_train[,6])
+iris_test[,6] = as.factor(iris_test[,6])
+```
+
+
+KNN model 
+```{r}
+library(caret)
+cctrl <- trainControl(method = "cv", number = 3, repeats = 3)
+
+knnmodel <- train(Species ~ ., data = iris_train[,2:6], 
+                            method = "knn", 
+                            trControl = cctrl,
+                             tuneLength = 15
+                            )
+
+```
+
+
+```{r}
+knnpred = predict(knnmodel, iris_test[,2:6])
+confusionMatrix(knnpred,iris_test[,6])
+```
+
+```{r}
+names(iris_test)
+```
+```{r}
+library(plyr)
+
+plotdata = cbind(x = iris_test$SepalLengthCm, y = iris_test$PetalLengthCm , predicted = knnpred)
+
+find_hull = function(df) df[chull(df$x, df$y), ]
+
+boundary = ddply(plotdata, .variables = "predicted", .fun = find_hull)
+
+```
+
+
+```{r}
+library(ggplot2)
+ggplot(iris_test, aes(x=SepalLengthCm,y =PetalWidthCm,z =knnpred,color = knnpred))+ geom_contour(bins = 3) + ggtitle("knnmodel") 
+
+```
+
+```{r}
+library(AppliedPredictiveModeling)
+transparentTheme(trans = .4)
+library(caret)
+featurePlot(x = iris_test[, 2:5], 
+            y = knnpred, 
+            plot = "pairs",
+            ## Add a key at the top
+            auto.key = list(columns = 3))
+```
+
+The above is the visiualization of test results
