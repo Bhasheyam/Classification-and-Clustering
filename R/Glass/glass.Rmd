@@ -187,6 +187,131 @@ covarage
 plot(covarage, xlab = "princple of component", ylab = " variance explained ", type ="b")
 ```
 
+```{r}
+
+plot(cumsum(covarage),xlab = "princple of component", ylab = " variance explained ", type ="b" )
+text(cumsum(covarage),cex=0.45)
+```
+
+```{r}
+covaragesum = cumsum(covarage )
+covaragesum
+```
+
+7 components is required to have almost more than 99% of variance  
+
+```{r}
+plotpca = as.data.frame(glasspca$x)
+names(plotpca)
+```
+
+```{r}
+library(ggplot2)
+ggplot(plotpca,aes(x = PC1, y =PC2, z = PC3,color = glass_train$type)) + geom_point()
+```
+
+We are nt able to see any visible cluster except type 7.
+
+Trying few Classifier
 
 
+To use MLR package we need to create a task
+
+
+```{r}
+names(glass_test)
+```
+
+
+```{r}
+library(mlr)
+glass_traintask = makeClassifTask(data = glass_train, target = "type")
+glass_testtask = makeClassifTask(data = glass_test,target= "type")
+```
+
+
+
+LDA analysis 
+```{r}
+glass_lda_model = makeLearner("classif.lda", predict.type = "response")
+glass_lda_train = train(glass_lda_model,glass_traintask)
+glass_lda_predicts = predict(glass_lda_train,glass_testtask)
+confusionMatrix(glass_lda_predicts$data$response,glass_test$type)
+```
+The accuracy is 67%
+
+```{r}
+library(pROC)
+actual = as.numeric(as.character(glass_test$type))
+lda_glass_pred= as.numeric(as.character(glass_lda_predicts$data$response))
+roc = multiclass.roc(lda_glass_pred,actual)
+auc(roc)
+plot.roc(roc$rocs[[1]])
+sapply(2:length(roc$rocs),function(i) lines.roc(roc$rocs[[i]],col=i))
+
+```
+
+
+decision Tree
+```{r}
+glass_dec_model = makeLearner("classif.rpart",predict.type = "response")
+
+treecv =  makeResampleDesc("CV",iters = 3L) 
+param = makeParamSet( makeIntegerParam("minsplit",lower = 10, upper = 20), 
+                      makeIntegerParam("minbucket", lower = 5, upper = 10),
+                      makeNumericParam("cp", lower = 0.001, upper = 0.1) 
+                    ) 
+ 
+ 
+control = makeTuneControlGrid() 
+
+glass_dec_tuning = tuneParams(learner = glass_dec_model, task = glass_testtask, resampling = treecv, control = control, par.set = param, measures = acc)
+```
+```{r}
+glass_dec_tuning$y
+
+```
+
+```{r}
+glass_dec_tuning$x
+```
+
+setting the nest parameter
+```{r}
+glass_dec_model_update = setHyperPars(glass_dec_model,par.vals =  glass_dec_tuning$x)
+glass_dec_train = train(glass_dec_model_update, glass_traintask)
+glass_dec_pred = predict(glass_dec_train, glass_testtask)
+confusionMatrix(glass_dec_pred$data$response, glass_test$type)
+```
+here the accuracy is 74%
+```{r}
+library(pROC)
+actual = as.numeric(as.character(glass_test$type))
+dec_glass_pred= as.numeric(as.character(glass_dec_pred$data$response))
+roc = multiclass.roc(dec_glass_pred,actual)
+auc(roc)
+plot.roc(roc$rocs[[1]])
+sapply(2:length(roc$rocs),function(i) lines.roc(roc$rocs[[i]],col=i, bg="grey",type="b"))
+
+
+
+```
+
+```{r}
+auc(roc)
+```
+
+
+
+```{r}
+library(rpart.plot)
+prp(glass_dec_train$learner.model)
+```
+
+ From the above we can see the model is more bais to type 1 and 2 which we can see in confusion matrix. 
+Random Forest 
+
+```{r}
+glass_random_model = makeLearner("classif.random")
+```
 
