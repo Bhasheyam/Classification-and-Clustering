@@ -1,0 +1,192 @@
+---
+title: "GlassClassification"
+output: github_document
+Author: "Bhasheyam Krishnan"
+---
+
+Loading the dataset
+```{r}
+glass = read.csv(file = "glass.csv")
+head(glass)
+```
+```{r}
+names(glass)
+```
+
+
+```{r}
+glass[glass == " "] = NA
+```
+
+Check for missing values
+```{r}
+
+anyNA(glass)
+```
+
+From the above there is no missing values
+#sum(is.na(glass)) to check the number of Missing values
+
+
+```{r}
+summary(glass)
+```
+
+All of the type Nuemeric, so we need the Type as Factor to classify the Instance. Also range are different so we need to scale the data(Normalize to 0-1 range)
+
+Now let visualise the data
+```{r}
+library(AppliedPredictiveModeling)
+library(caret)
+transparentTheme(trans = .4)
+library(ggplot2)
+
+featurePlot(x = glass[,1:9],
+            y = glass[,10],
+            plot = "pairs",
+            title = " Glass Visuaisation",
+            auto.key = list(columns = 5)
+            )
+```
+
+```{r}
+library(AppliedPredictiveModeling)
+library(caret)
+featurePlot(x = glass[,1:9],
+            y = glass[,10], 
+            plot = "box", 
+            ## Pass in options to bwplot() 
+            scales = list(y = list(relation="free"),
+                          x = list(rot = 90)),  
+            layout = c(3,1 ), 
+            auto.key = list(columns = 2))
+```
+
+```{r}
+library(AppliedPredictiveModeling)
+library(caret)
+transparentTheme(trans = .9)
+featurePlot(x = glass[,1:9],
+            y = glass[,10],
+            plot = "density", 
+            ## Pass in options to xyplot() to 
+            ## make it prettier
+            scales = list(x = list(relation="free"), 
+                          y = list(relation="free")), 
+            adjust = 1.5, 
+            pch = "|", 
+            layout = c(4, 1), 
+            auto.key = list(columns = 3))
+```
+
+From the above visualisation of data we can find few Features have lesser importance. which will be use full to make decisions in the classifiers as we can see FE features has many 0 for many instance.
+
+From the above we can observe more predominance of type 1 and 3.
+
+```{r}
+dim (glass)
+```
+```{r}
+glass[,10] = as.factor(glass[,10])
+str(glass[,10])
+```
+
+So they are 6 types of class in the datset
+
+```{r}
+unique(glass[,10], incomparables = FALSE)
+```
+From the above we can observe they are 7 types of glass but we have only 6 of them in the dataset
+
+
+```{r}
+normal = function(x){
+  num = x - min(x)
+  den = max(x) - min(x)
+  return (num/den)
+}
+glassnormal = as.data.frame(lapply(Filter(is.numeric,glass[,1:9]),normal))
+glassnormal = cbind(glassnormal,type = glass[,10])
+dim(glassnormal)
+```
+```{r}
+names(glassnormal)
+```
+
+Last step of preprocessing lets clean the outliers.
+
+
+```{r}
+boxplot(Filter(is.numeric,glassnormal[,1:9]))
+```
+From the above points are very near to range, only CA , K and Ba  seems to have potential few outliers. Removing values more thena 0.9 will remove most of them.
+
+Since we have very few instance 214, so lets keep the ouliters since we are doing supervised learning we know the lables. where as this will be a problem in unsupervised Learning.
+
+
+Since the Instance is very low and we have more feature lets first remove the less significant features.
+
+Boruta is type of feature selection It gives the importance of every feature.
+```{r}
+library(Boruta)
+set.seed(123)
+borutaselection = Boruta(type~ . , data = glassnormal, doTrace = 2)
+borutaselection
+
+```
+
+From the above we can obseerve all the features are important.
+
+
+
+Lets divide the dataset into Train and test
+```{r}
+set.seed(123)
+jumble = runif(nrow(glassnormal))
+glassnormal = glassnormal[ordered(jumble),]
+glasssample = sample(2,nrow(glassnormal), replace = TRUE,prob = c(0.67,0.33))
+glass_train = glassnormal[glasssample == 1,]
+glass_test = glassnormal[glasssample == 2,]
+dim(glass_train)
+dim(glass_test)
+```
+
+```{r}
+table(glass$Type)
+table(glass_train$type)
+table(glass_test$type)
+```
+
+
+
+From the above we can see the dataset is divided properly. since it is small dataset it fine. if we have a bigger datase then it will be issue as type 6 has 9 and type 1 has 70 which is almost 7 types higher.
+
+
+```{r}
+glasspca = prcomp(glass_train[,1:9], scale. = T)
+names(glasspca)
+```
+
+
+```{r}
+library(bioplots)
+biplot(glasspca)
+```
+
+```{r}
+variance = glasspca$sdev
+varaince2 = variance^2
+varaince2
+```
+```{r}
+covarage = varaince2 / sum(varaince2)
+covarage
+```
+
+```{r}
+plot(covarage, xlab = "princple of component", ylab = " variance explained ", type ="b")
+```
+
+
+
+
