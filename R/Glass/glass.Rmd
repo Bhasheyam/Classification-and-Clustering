@@ -308,10 +308,59 @@ library(rpart.plot)
 prp(glass_dec_train$learner.model)
 ```
 
- From the above we can see the model is more bais to type 1 and 2 which we can see in confusion matrix. 
+ From the above we can see the model is more bais to type 1 and 2 from the confusion matrix.
+
+
+
+ 
+ 
 Random Forest 
 
 ```{r}
-glass_random_model = makeLearner("classif.random")
+glass_random_model = makeLearner("classif.randomForest", predict.type = "response")
+glass_random_model$par.vals = list(importance = TRUE) 
+ 
+glass_random_param <- makeParamSet( makeIntegerParam("ntree",lower = 50, upper = 450),
+                                    makeIntegerParam("mtry", lower = 3, upper = 10), 
+                                    makeIntegerParam("nodesize", lower = 10, upper = 40)) 
+randomcontrol =      makeTuneControlRandom(maxit = 30L) 
+
+glass_random_CV = makeResampleDesc("CV",iter =  10L) 
+
+glass_randomtune <- tuneParams(learner = glass_random_model, resampling = glass_random_CV, task = traintask, par.set = glass_random_param, control = randomcontrol, measures = acc) 
+
+
+
+```
+
+```{r}
+glass_randomtune$y
+```
+
+```{r}
+glass_randomtune$x
+```
+
+```{r}
+glass_random_model_updated = setHyperPars(glass_random_model, par.vals =  glass_randomtune$x)
+glass_random_train = train(glass_random_model_updated, glass_traintask)
+glass_random_predict = predict(glass_random_train, glass_testtask)
+confusionMatrix(glass_random_predict$data$response, glass_test$type)
+
+```
+
+
+```{r}
+library(pROC)
+actual = as.numeric(as.character(glass_test$type))
+ran_glass_pred= as.numeric(as.character(glass_random_predict$data$response))
+roc = multiclass.roc(ran_glass_pred,actual)
+
+plot.roc(roc$rocs[[1]])
+sapply(2:length(roc$rocs),function(i) lines.roc(roc$rocs[[i]],col=i, bg="grey",type="b"))
+```
+
+```{r}
+auc(roc)
 ```
 
