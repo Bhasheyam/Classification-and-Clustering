@@ -317,6 +317,7 @@ prp(glass_dec_train$learner.model)
 Random Forest 
 
 ```{r}
+library(mlr)
 glass_random_model = makeLearner("classif.randomForest", predict.type = "response")
 glass_random_model$par.vals = list(importance = TRUE) 
  
@@ -327,7 +328,7 @@ randomcontrol =      makeTuneControlRandom(maxit = 30L)
 
 glass_random_CV = makeResampleDesc("CV",iter =  10L) 
 
-glass_randomtune <- tuneParams(learner = glass_random_model, resampling = glass_random_CV, task = traintask, par.set = glass_random_param, control = randomcontrol, measures = acc) 
+glass_randomtune <- tuneParams(learner = glass_random_model, resampling = glass_random_CV, task = glass_traintask, par.set = glass_random_param, control = randomcontrol, measures = acc) 
 
 
 
@@ -363,4 +364,95 @@ sapply(2:length(roc$rocs),function(i) lines.roc(roc$rocs[[i]],col=i, bg="grey",t
 ```{r}
 auc(roc)
 ```
+Naive bayes
 
+```{r}
+library(e1071)
+glass_naive =  naiveBayes(type ~ ., data = glass_train)
+```
+
+```{r}
+glass_naive_pred = predict(glass_naive,glass_test)
+confusionMatrix(glass_naive_pred, glass_test$type)
+```
+The model didnt fit well with Naive Bayes
+
+
+
+
+```{r}
+library(class)
+glass_knn_model = knn(train = glass_train[2:10], test = glass_test[2:10], cl= glass_train$type, k = 7)
+confusionMatrix(glass_knn_model, glass_test$type)
+summary(glass_knn_model)
+```
+
+```{r}
+names(glass_train)
+```
+
+```{r}
+library(ggplot2)
+ggplot(glass_test, aes(x = Na, y = Si  , color = glass_knn_model )) + geom_point()
+```
+
+
+```{r}
+library(ggplot2)
+ggplot(glass_test, aes(x = Na, y = Si  , color = glass_test$type )) + geom_point()
+```
+
+
+
+```{r}
+library(pROC)
+actual = as.numeric(as.character(glass_test$type))
+knn_glass_pred= as.numeric(as.character(glass_knn_model))
+roc = multiclass.roc(knn_glass_pred,actual)
+
+plot.roc(roc$rocs[[1]])
+sapply(2:length(roc$rocs),function(i) lines.roc(roc$rocs[[i]],col=i, bg="grey",type="b"))
+```
+
+From the above we can see 100% which is an overfit, 100 accuracy is obtained as the dataset is small. if we have more data it will be miss leading.
+
+we took some 67 percent and teste the whole dataset to check the accuracy, here is found using the rule k = value of sqaure root of the dataset and iterate down to find the best value.
+```{r}
+library(class)
+glass_knn_model_full = knn(train = glass_train[2:10], test = glass[2:10], cl= glass_train$type, k = 7)
+confusionMatrix(glass_knn_model_full, glass$Type)
+
+```
+
+Here the accuracy is low for the same model. actually very low. so when we have the more data. so lets try with higher k and test
+
+```{r}
+library(class)
+glass_knn_model_full1 = knn(train = glass_train[2:10], test = glass[2:10], cl= glass_train$type, k = 7)
+confusionMatrix(glass_knn_model_full1, glass$Type)
+```
+```{r}
+table(glass_knn_model_full1)
+table(glass$Type)
+```
+
+
+After few iteration this model is better with k = 7 . from the matrix we can clear see that type 3 and 4 has no proper clusters and it divided into cluster of type 5,6,7 we can come to that conclusion from above.so lets plot and see the difference.
+
+since Al and si feature equal density we try to plot cluters with that
+```{r}
+library(ggplot2)
+ggplot(glass, aes(x = Al, y = Si  , color = glass$Type )) + geom_point()
+```
+
+
+From the above we can clearly  tyoe 3 green color is spreaded all over and is divided in all the features.so howmuch ever we change the neibour count "k" will get the same result. so we dataset doesnt have sufficient details about the type 3.
+
+
+
+
+```{r}
+library(ggplot2)
+ggplot(glass, aes(x = Al, y = Si  , color = glass_knn_model_full1 )) + geom_point()
+```
+From the above can conclude the KNN is better model for the given dataset. 
