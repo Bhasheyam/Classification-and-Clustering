@@ -1,0 +1,322 @@
+---
+title: "Employee"
+output: github_document
+Author: "Bhasheyam Krishnan"
+---
+
+```{r}
+hrdata = read.csv(file = "HR_comma_sep.csv")
+head(hrdata)
+```
+
+
+```{r}
+anyNA(hrdata)
+```
+
+There is no missing values.
+lets visualise the data
+
+```{r}
+dim(hrdata)
+```
+
+```{r}
+names(hrdata)
+```
+
+```{r}
+summary(hrdata)
+```
+
+
+```{r}
+table(hrdata$left)
+```
+
+So here postive class retained or person stayed. they are 3571 records of people left the job.
+```{r}
+
+library(ggplot2)
+ggplot(hrdata, aes(x = left )) + geom_bar(aes(fill = salary)) + theme_bw()
+
+```
+ People with lowe salary have left,
+ 
+ 
+ 
+```{r}
+library(ggplot2)
+ggplot(hrdata,aes(x = left, y = satisfaction_level,color = salary)) + geom_point() + theme_bw()
+
+```
+
+This is an another perpective , we can see mixed salary in the ppl stayed and there is no high point in the people left.
+
+
+
+```{r}
+library(ggplot2)
+ggplot(hrdata, aes(x = number_project, y = satisfaction_level, color= salary)) + geom_point()+theme_bw()
+```
+
+
+```{r}
+library(ggplot2)
+
+ggplot(hrdata,aes(x = average_montly_hours,y = satisfaction_level, color = salary ))+geom_point()+theme_bw()
+```
+
+This stat doesnt give us any picture, but we can see dense square region where avaerag monthly hour and high satisfaction and salary is mixed . and we have another square where low work satisfaction and working hours and low salary as predominent.
+
+```{r}
+hrdata$left = as.factor(hrdata$left)
+```
+
+
+
+```{r}
+library(ggplot2)
+ggplot(hrdata, aes( Work_accident))+ geom_bar(aes(fill=left)) + theme_bw()
+```
+The work accident doenst give any significant.
+
+
+```{r}
+
+library(ggplot2)
+ggplot(hrdata, aes(x = sales))+ geom_bar(aes(fill = left)) +  theme_bw()
+
+```
+ we can observe all the dept have similar pattern, suggest us that company may have a policy some rentension policy.
+ 
+ 
+
+
+ 
+```{r}
+names(hrdata)
+```
+
+so this is of the type classfication and the tagrget variable is left,
+
+sales, salary, left , promotion_last_5years are of the type factor
+ and the average _monthly_hours feature is having higher scale and need to be scaled, also we need to scale number of preoject.
+```{r}
+
+hrdata$salary = as.factor(hrdata$salary)
+hrdata$sales = as.factor(hrdata$sales)
+hrdata$promotion_last_5years = as.factor(hrdata$promotion_last_5years)
+factors = function(x){
+  
+  num = x- min(x)
+  den = max(x)- min(x)
+  return (num/den)
+}
+
+hrdata$number_project = factors(hrdata$number_project)
+hrdata$average_montly_hours = factors(hrdata$average_montly_hours)
+hrdata$time_spend_company = factors(hrdata$time_spend_company)
+
+
+```
+```{r}
+summary(hrdata)
+```
+Now the dataset is read to perform classfication 
+lets reduce the feature which are not significant.
+```{r}
+library(Boruta)
+
+hr_selection_feature = Boruta(left~ . , data = hrdata)
+
+
+hr_selection_feature$finalDecision
+```
+
+From the above we can see all the features have some significants
+
+spliting the data into train and test
+
+
+```{r}
+set.seed(123)
+jumble = runif(nrow(hrdata))
+hrdata = hrdata[ordered(jumble),]
+hr_index = sample(2,nrow(hrdata),prob = c(0.75,0.25), replace = TRUE)
+hr_train = hrdata[hr_index == 1,]
+hr_test =hrdata[hr_index == 2,]
+dim(hr_train)
+dim(hr_test)
+table(hr_train$left)
+table(hr_test$left)
+
+```
+
+From the above we an see the split seems balanced.
+
+Classifiation techniques with  tuning using MLR 
+
+```{r}
+library(mlr)
+hr_train_task = makeClassifTask(data = hr_train,target = "left" )
+hr_test_task = makeClassifTask(data = hr_test, target = "left")
+```
+
+
+LDA analysis
+```{r}
+library(mlr)
+library(caret)
+hr_lda = makeLearner("classif.lda", predict.type = "response")
+hr_lda_train = mlr::train(hr_lda, hr_train_task)
+hr_predicted = predict(hr_lda_train, hr_test_task)
+confusionMatrix (hr_predicted$data$response, hr_test$left)
+
+```
+From the above we can use the model performance is low.
+
+
+
+
+```{r}
+library(ROCR)
+library(pROC)
+
+actual = as.numeric(as.character(hr_test$left))
+lda_hr_pred= as.numeric(as.character(hr_predicted$data$response))
+roc = multiclass.roc(lda_hr_pred,actual)
+auc(roc)
+```
+
+```{r}
+library(ROCR)
+library(pROC)
+
+plot.roc(roc$rocs[[1]])
+
+```
+
+```{r}
+library(mlr)
+hr_des = makeLearner("classif.rpart", predict.type = "response")
+treecv =  makeResampleDesc("CV",iters = 10L)
+param = makeParamSet(
+makeIntegerParam("minsplit",lower = 10, upper = 20),
+makeIntegerParam("minbucket", lower = 5, upper = 10),
+makeNumericParam("cp", lower = 0.001, upper = 0.1)
+)
+
+control = makeTuneControlGrid()
+hr_tree_tune = tuneParams(learner = hr_des, resampling = treecv, task = hr_train_task, par.set = param, control = control, measures = acc)
+```
+
+
+```{r}
+hr_tree_tune$y
+```
+
+Cross validation error is better for the decition tree.
+
+```{r}
+library(mlr)
+library(caret)
+hr_dec_model = setHyperPars(hr_des,par.vals =  hr_tree_tune$x)
+hr_dec_train = mlr::train(hr_dec_model, hr_train_task)
+hr_dec_predict = predict(hr_dec_train, hr_test_task)
+confusionMatrix(hr_dec_predict$data$response, hr_test$left)
+```
+
+
+
+From the above we can see the decision tree model work really well for the dataset.
+ to make sure the model is not over fit let create a new test set fit the model
+ 
+ 
+ 
+```{r}
+set.seed(125)
+jumble1 = runif(nrow(hrdata))
+hrdata1 = hrdata[ordered(jumble1),]
+testindex = sample(2,nrow(hrdata1), replace = TRUE)
+hr_test_1 = hrdata1[testindex == 1,]
+hr_test_2 = hrdata1[testindex == 2,]
+hr_test_task_1 = makeClassifTask(data = hr_test_1, target = "left")
+hr_test_task_2 = makeClassifTask(data = hr_test_2, target = "left")
+```
+
+
+```{r}
+library(mlr)
+library(caret)
+hr_dec_train = mlr::train(hr_dec_model, hr_train_task)
+hr_dec_predict = predict(hr_dec_train, hr_test_task_1)
+confusionMatrix(hr_dec_predict$data$response, hr_test_1$left)
+```
+```{r}
+library(mlr)
+library(caret)
+hr_dec_train = mlr::train(hr_dec_model, hr_train_task)
+hr_dec_predict = predict(hr_dec_train, hr_test_task_2)
+confusionMatrix(hr_dec_predict$data$response, hr_test_2$left)
+```
+
+
+
+From the we can see the model performs well for the given dataset
+
+Lets view the result in tree structure
+
+
+```{r}
+library(rattle)
+fancyRpartPlot(hr_dec_train$learner.model)
+```
+
+
+
+Roc curve 
+
+
+```{r}
+library(ROCR)
+library(pROC)
+library(gplots)
+actual = c()
+predicted1 = c()
+for(n in hr_test_2$left ){
+  if ( n == "0"){
+    actual = c(actual,0)
+  }
+  else{
+    actual = c(actual,1)
+  }
+  
+}
+for(n1 in hr_dec_predict$data$response ){
+  if ( n1 == "0"){
+    predicted1 = c(predicted1,0)
+  }
+  else{
+    predicted1 = c(predicted1,1)
+  }
+  
+}
+length(predicted1)
+dec_roc  = prediction(actual,predicted1)
+
+dec_peformance = performance(dec_roc, measure = "auc")
+
+auc = dec_peformance@y.values[[1]]
+dec_performance_1 = performance(dec_roc, measure = "tpr", x.measure = "fpr")
+
+dec_roc_data = data.frame(fpr = unlist(dec_performance_1@x.values), 
+                             tpr = unlist(dec_performance_1@y.values))
+
+ggplot(dec_roc_data,aes(x = fpr, ymin = 0 , ymax = tpr)) + geom_ribbon(alpha=0.2) +
+    geom_line(aes(y=tpr),color= "blue") +
+    ggtitle(paste0("ROC Curve w/ AUC=", auc))
+```
+
+From the above achive 97% accuracy , so this is one of the batter model.
+
